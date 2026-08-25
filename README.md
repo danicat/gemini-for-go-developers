@@ -66,7 +66,7 @@ curl -X POST http://localhost:8080/api/appraise \
 
 ### 3. Modular Multi-Agent System (`part-3/03-adk-agent`)
 
-Built with Google's **[Agent Development Kit (ADK)](https://google.github.io/adk-docs/)** (`google.golang.org/adk/v2`), using session-driven state management, event streaming runners, and modular function tools.
+Built with Google's **[Agent Development Kit (ADK)](https://adk.dev)**, using session-driven state management, event streaming runners, and modular function tools.
 
 ```bash
 cd part-3/03-adk-agent
