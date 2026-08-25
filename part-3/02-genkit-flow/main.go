@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -22,7 +21,7 @@ type GameItem struct {
 	Title     string  `json:"title"`
 	Platform  string  `json:"platform"`
 	Year      int     `json:"year"`
-	Condition string  `json:"condition"` // e.g. "Loose Cartridge", "CIB (Complete in Box)", "Mint"
+	Condition string  `json:"condition"`
 	PricePaid float64 `json:"price_paid"`
 	Notes     string  `json:"notes"`
 }
@@ -67,7 +66,7 @@ type CatalogResponse struct {
 }
 
 type AppraiserRequest struct {
-	Prompt string `json:"prompt"`
+	Prompt string `json:"prompt" jsonschema:"description=The collector's question or purchase offer to evaluate"`
 }
 
 type AppraiserResponse struct {
@@ -77,13 +76,12 @@ type AppraiserResponse struct {
 func main() {
 	ctx := context.Background()
 
-	// 1. Initialise Genkit with Vertex AI / Gemini Enterprise plugin
+	// 1. Initialise Genkit with Vertex AI plugin
 	g := genkit.Init(ctx,
 		genkit.WithPlugins(&googlegenai.VertexAI{
 			ProjectID: os.Getenv("GOOGLE_CLOUD_PROJECT"),
 			Location:  "global",
 		}),
-		genkit.WithDefaultModel("vertexai/gemini-3.7-flash"),
 	)
 
 	// 2. Define strongly-typed tool with automatic schema generation
@@ -93,11 +91,19 @@ func main() {
 		"Search the collector's personal inventory for owned games by title or platform.",
 		func(ctx *ai.ToolContext, req CatalogRequest) (CatalogResponse, error) {
 			queryLower := strings.ToLower(strings.TrimSpace(req.Query))
+			queryWords := strings.Fields(queryLower)
 			var matches []GameItem
 
 			for _, item := range localCatalog {
-				if strings.Contains(strings.ToLower(item.Title), queryLower) ||
-					strings.Contains(strings.ToLower(item.Platform), queryLower) {
+				itemText := strings.ToLower(item.Title + " " + item.Platform)
+				allMatch := true
+				for _, word := range queryWords {
+					if !strings.Contains(itemText, word) {
+						allMatch = false
+						break
+					}
+				}
+				if allMatch {
 					matches = append(matches, item)
 				}
 			}
@@ -117,50 +123,31 @@ func main() {
 		},
 	)
 
-	// 3. Define the Appraiser Flow
+	// 3. Define structured appraisal flow with typed request and response
 	appraiserFlow := genkit.DefineFlow(
 		g,
-		"retroAppraiserFlow",
-		func(ctx context.Context, input string) (string, error) {
-			systemInstruction := "You are an expert Retro Game Appraiser. When evaluating purchases, " +
-				"check the user's collection catalog first, then evaluate current market value " +
-				"to provide an accurate appraisal and buying recommendation."
-
-			resp, err := genkit.GenerateText(ctx, g,
-				ai.WithSystem(systemInstruction),
-				ai.WithPrompt(input),
+		"appraise_game",
+		func(ctx context.Context, req AppraiserRequest) (AppraiserResponse, error) {
+			resp, err := genkit.Generate(ctx, g,
+				ai.WithModelName("vertexai/gemini-3.7-flash"),
+				ai.WithSystem(
+					"You are an expert Retro Game Appraiser. Assist collectors by evaluating prospective purchases, "+
+						"cross-referencing their personal inventory, and assessing fair market valuations. "+
+						"Always search the collection catalog using search_catalog before providing purchase recommendations.",
+				),
+				ai.WithPrompt(req.Prompt),
 				ai.WithTools(catalogTool),
 			)
 			if err != nil {
-				return "", fmt.Errorf("appraiser generation error: %w", err)
+				return AppraiserResponse{}, fmt.Errorf("appraisal generation failed: %w", err)
 			}
-
-			return resp, nil
+			return AppraiserResponse{Appraisal: resp.Text()}, nil
 		},
 	)
 
-	// 4. Expose the Flow as a standard HTTP API
+	// 4. Mount flow directly using Genkit's built-in HTTP handler
 	mux := http.NewServeMux()
-
-	mux.HandleFunc("POST /api/appraise", func(w http.ResponseWriter, r *http.Request) {
-		var req AppraiserRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "invalid request body", http.StatusBadRequest)
-			return
-		}
-
-		verdict, err := appraiserFlow.Run(r.Context(), req.Prompt)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("evaluation error: %v", err), http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(AppraiserResponse{Appraisal: verdict})
-	})
-
-	// Also attach Genkit's standard flow handler for Developer UI inspection
-	mux.Handle("/flow/retroAppraiserFlow", genkit.Handler(appraiserFlow))
+	mux.Handle("POST /api/appraise", genkit.Handler(appraiserFlow))
 
 	port := os.Getenv("PORT")
 	if port == "" {

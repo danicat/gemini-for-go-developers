@@ -59,7 +59,7 @@ Send a test request to the endpoint:
 ```bash
 curl -X POST http://localhost:8080/api/appraise \
   -H "Content-Type: application/json" \
-  -d '{"prompt": "I found a copy of Chrono Trigger for SNES for $250. Is this a good deal?"}'
+  -d '{"data": {"prompt": "I found a copy of Chrono Trigger for SNES for $250. Is this a good deal?"}}'
 ```
 
 ---
