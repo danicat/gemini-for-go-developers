@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"google.golang.org/genai"
 )
@@ -123,66 +126,89 @@ func main() {
 		},
 	}
 
-	// 3. Prepare initial user prompt
-	prompt := "I found a copy of EarthBound for SNES in mint Complete-in-Box (CIB) condition for $350. " +
-		"Do I already own it, and is $350 a good deal compared to current market prices?"
+	// 3. Graceful shutdown on Ctrl+C (SIGINT) or SIGTERM
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sigChan
+		fmt.Println("\nGoodbye!")
+		os.Exit(0)
+	}()
 
-	contents := []*genai.Content{
-		{
-			Role:  "user",
-			Parts: []*genai.Part{genai.NewPartFromText(prompt)},
-		},
-	}
+	model := "gemini-3.8-flash"
+	var contents []*genai.Content
 
-	model := "gemini-3.7-flash"
-	maxTurns := 6
+	fmt.Println("Retro Game Appraiser (SDK Agent)")
+	fmt.Println("Type your question below, or 'exit' (Ctrl+C / Ctrl+D) to quit.")
+	fmt.Println("-----------------------------------------------------------------")
 
-	// 4. The Agent Loop (LLM Request -> Tool Dispatch -> Tool Result -> LLM Request)
-	for turn := 0; turn < maxTurns; turn++ {
-		resp, err := client.Models.GenerateContent(ctx, model, contents, config)
-		if err != nil {
-			log.Fatalf("error generating content: %v", err)
+	scanner := bufio.NewScanner(os.Stdin)
+	for {
+		fmt.Print("\nUser: ")
+		if !scanner.Scan() {
+			fmt.Println("\nGoodbye!")
+			break
 		}
 
-		if len(resp.Candidates) == 0 || resp.Candidates[0].Content == nil {
-			log.Fatal("received empty response candidate from model")
+		input := strings.TrimSpace(scanner.Text())
+		if input == "" {
+			continue
+		}
+		if strings.EqualFold(input, "exit") {
+			fmt.Println("Goodbye!")
+			break
 		}
 
-		// Append the model's response to the conversation history
-		modelContent := resp.Candidates[0].Content
-		contents = append(contents, modelContent)
-
-		// Check if the model requested any client-side tool executions
-		funcCalls := resp.FunctionCalls()
-		if len(funcCalls) == 0 {
-			// Terminal condition: model produced its final natural language answer
-			fmt.Println("\n=== Appraiser Verdict ===")
-			fmt.Println(resp.Text())
-			return
-		}
-
-		// Execute each requested tool and prepare response parts
-		var responseParts []*genai.Part
-		for _, call := range funcCalls {
-			fmt.Printf("[Harness] Executing tool: %s(args=%v)\n", call.Name, call.Args)
-
-			var result map[string]any
-			switch call.Name {
-			case "search_catalog":
-				result = searchCatalogTool(call.Args)
-			default:
-				result = map[string]any{"error": fmt.Sprintf("unsupported tool: %s", call.Name)}
-			}
-
-			responseParts = append(responseParts, genai.NewPartFromFunctionResponse(call.Name, result))
-		}
-
-		// Return tool execution results as a user turn
 		contents = append(contents, &genai.Content{
 			Role:  "user",
-			Parts: responseParts,
+			Parts: []*genai.Part{genai.NewPartFromText(input)},
 		})
-	}
 
-	log.Fatal("exceeded maximum conversation turns without reaching terminal state")
+		// 4. The Agent Loop: model generation -> tool dispatch -> feedback -> until final answer
+		for {
+			resp, err := client.Models.GenerateContent(ctx, model, contents, config)
+			if err != nil {
+				log.Printf("error generating content: %v", err)
+				break
+			}
+
+			if len(resp.Candidates) == 0 || resp.Candidates[0].Content == nil {
+				log.Println("received empty response candidate from model")
+				break
+			}
+
+			// Append the model's response to the conversation history
+			modelContent := resp.Candidates[0].Content
+			contents = append(contents, modelContent)
+
+			// Check if the model requested any client-side tool executions
+			funcCalls := resp.FunctionCalls()
+			if len(funcCalls) == 0 {
+				fmt.Printf("\nAppraiser: %s\n", resp.Text())
+				break
+			}
+
+			// Execute each requested tool and prepare response parts
+			var responseParts []*genai.Part
+			for _, call := range funcCalls {
+				fmt.Printf("[Harness] Executing tool: %s(args=%v)\n", call.Name, call.Args)
+
+				var result map[string]any
+				switch call.Name {
+				case "search_catalog":
+					result = searchCatalogTool(call.Args)
+				default:
+					result = map[string]any{"error": fmt.Sprintf("unsupported tool: %s", call.Name)}
+				}
+
+				responseParts = append(responseParts, genai.NewPartFromFunctionResponse(call.Name, result))
+			}
+
+			// Return tool execution results as a user turn
+			contents = append(contents, &genai.Content{
+				Role:  "user",
+				Parts: responseParts,
+			})
+		}
+	}
 }
