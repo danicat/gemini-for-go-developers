@@ -116,6 +116,7 @@ func main() {
 					"prices using Google Search to evaluate whether the deal is fair, overpriced, or a bargain."},
 			},
 		},
+		// ThinkingConfig: &genai.ThinkingConfig{IncludeThoughts: true},
 		Tools: []*genai.Tool{
 			{
 				FunctionDeclarations: []*genai.FunctionDeclaration{catalogToolDecl},

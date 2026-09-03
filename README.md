@@ -81,7 +81,7 @@ Or launch the developer web interface and REST API:
 go run main.go web webui api
 ```
 
-Open `http://localhost:8080` in your browser to interact with the agent via the ADK Web UI.
+Open `http://localhost:8080/ui/` in your browser to interact with the agent via the ADK Web UI.
 
 ---
 
