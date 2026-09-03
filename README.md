@@ -68,21 +68,20 @@ curl -X POST http://localhost:8080/api/appraise \
 
 Built with Google's **[Agent Development Kit (ADK)](https://adk.dev)**, using session-driven state management, event streaming runners, and modular function tools.
 
+Run the agent in interactive console mode:
+
 ```bash
 cd part-3/03-adk-agent
 go run main.go
 ```
 
-Send a test request with a persistent session ID:
+Or launch the developer web interface and REST API:
 
 ```bash
-curl -X POST http://localhost:8080/api/chat \
-  -H "Content-Type: application/json" \
-  -d '{
-    "prompt": "I found EarthBound for SNES (CIB) for $350. Do I already own it, and is that a fair price?",
-    "session_id": "collector-session-1"
-  }'
+go run main.go web webui api
 ```
+
+Open `http://localhost:8080` in your browser to interact with the agent via the ADK Web UI.
 
 ---
 

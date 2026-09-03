@@ -14,6 +14,7 @@ import (
 	"github.com/firebase/genkit/go/ai"
 	"github.com/firebase/genkit/go/genkit"
 	"github.com/firebase/genkit/go/plugins/googlegenai"
+	"google.golang.org/genai"
 )
 
 // GameItem represents a collectible item in the user's personal inventory.
@@ -129,12 +130,20 @@ func main() {
 		"appraise_game",
 		func(ctx context.Context, req AppraiserRequest) (AppraiserResponse, error) {
 			resp, err := genkit.Generate(ctx, g,
-				ai.WithModelName("vertexai/gemini-3.7-flash"),
+				ai.WithModelName("vertexai/gemini-3.8-flash"),
 				ai.WithSystem(
 					"You are an expert Retro Game Appraiser. Assist collectors by evaluating prospective purchases, "+
 						"cross-referencing their personal inventory, and assessing fair market valuations. "+
 						"Always search the collection catalog using search_catalog before providing purchase recommendations.",
 				),
+				ai.WithConfig(&genai.GenerateContentConfig{
+					ThinkingConfig: &genai.ThinkingConfig{IncludeThoughts: true},
+					Tools: []*genai.Tool{
+						{
+							GoogleSearch: &genai.GoogleSearch{},
+						},
+					},
+				}),
 				ai.WithPrompt(req.Prompt),
 				ai.WithTools(catalogTool),
 			)

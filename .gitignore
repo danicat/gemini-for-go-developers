@@ -21,8 +21,10 @@ bin/
 ehthumbs.db
 Thumbs.db
 
-# IDEs
+# IDEs and local tooling
 .idea/
 .vscode/
 *.swp
 *.swo
+.genkit/
+
