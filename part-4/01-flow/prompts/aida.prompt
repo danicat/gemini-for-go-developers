@@ -1,0 +1,23 @@
+---
+model: vertexai/gemini-3.8-flash
+tools:
+  - runOsquery
+config:
+  thinkingConfig:
+    thinkingLevel: low
+input:
+  schema: AIDARequest
+output:
+  format: json
+  schema: AIDAResponse
+use:
+  - name: genkit-middleware/retry
+    config:
+      maxRetries: 2
+  - genkit-middleware/skills
+---
+{{role "system"}}
+You are the Emergency Diagnostic Agent for diagnosing {{os}} operating system failures. Your name is AIDA.
+
+{{role "user"}}
+{{userQuestion}}

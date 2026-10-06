@@ -8,17 +8,21 @@ Companion source code and runnable examples for the **[Gemini for Go Developers]
 
 ```text
 .
-└── part-3/
-    ├── 01-sdk-agent/     # Low-level agent loop using google.golang.org/genai
-    ├── 02-genkit-flow/    # Flow-centric pipeline using Firebase Genkit Go
-    └── 03-adk-agent/      # Modular multi-agent using Google Agent Development Kit (ADK)
+├── part-3/
+│   ├── 01-sdk-agent/      # Low-level agent loop using google.golang.org/genai
+│   ├── 02-genkit-flow/    # Flow-centric pipeline using Firebase Genkit Go
+│   └── 03-adk-agent/      # Modular multi-agent using Google Agent Development Kit (ADK)
+└── part-4/
+    ├── 01-flow/           # Stateless diagnostic flow with dotprompt, retry & Agent Skills
+    ├── 02-agent/          # Stateful multi-turn terminal & HTTP agent (genkitx.DefineAgent)
+    └── 03-multi-agent/    # Multi-agent delegation (aida -> inspector & researcher)
 ```
 
 ---
 
 ## Part 3: Building Autonomous Agents in Go
 
-In [Part 3](https://danicat.dev/posts/20260825-gemini-for-go-developers-part-3-building-agents/), we build a **Retro Game Appraiser** across three distinct paradigms in Go. The agent inspects a collector's personal inventory to check for owned titles, queries live market valuations with Google Search grounding, and provides actionable purchase advice.
+In [Part 3](https://danicat.dev/posts/gemini-for-go-developers-part-3-building-agents/), we build a **Retro Game Appraiser** across three distinct paradigms in Go. The agent inspects a collector's personal inventory to check for owned titles, queries live market valuations with Google Search grounding, and provides actionable purchase advice.
 
 ### Prerequisites
 
@@ -82,6 +86,21 @@ go run main.go web webui api
 ```
 
 Open `http://localhost:8080/ui/` in your browser to interact with the agent via the ADK Web UI.
+
+---
+
+## Part 4: Building Agentic Backends with Genkit
+
+In [Part 4](https://danicat.dev/posts/building-agentic-backends-with-genkit-go/), we rebuild **AIDA** (the AI Diagnostic Agent powered by [osquery](https://osquery.io/)) in Go with Genkit, progressing from a single-shot typed flow to a stateful multi-agent backend:
+
+```bash
+export GOOGLE_CLOUD_PROJECT="your-project-id"
+export GOOGLE_CLOUD_LOCATION="global"
+```
+
+- **`part-4/01-flow`**: Single-shot `diagnose` flow using embedded `dotprompt` (`prompts/aida.prompt`), typed schemas (`DefineSchemaFor` + `LookupDataPrompt`), `runOsquery` tool, and OS-specific `osquery` Agent Skills (`darwin`, `linux`, `windows`).
+- **`part-4/02-agent`**: Stateful multi-turn agent (`genkitx.DefineAgent`) backed by an in-memory session store (`localstore.NewInMemorySessionStore`) with both an interactive REPL and HTTP endpoints (`genkitx.AllAgentRoutes`).
+- **`part-4/03-multi-agent`**: Multi-agent delegation via `middlewarex.Agents`, splitting AIDA's work between `inspector` (host telemetry via `osquery`) and `researcher` (web lookup via Google Search grounding).
 
 ---
 
