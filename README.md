@@ -12,10 +12,13 @@ Companion source code and runnable examples for the **[Gemini for Go Developers]
 │   ├── 01-sdk-agent/      # Low-level agent loop using google.golang.org/genai
 │   ├── 02-genkit-flow/    # Flow-centric pipeline using Firebase Genkit Go
 │   └── 03-adk-agent/      # Modular multi-agent using Google Agent Development Kit (ADK)
-└── part-4/
-    ├── 01-flow/           # Stateless diagnostic flow with dotprompt, retry & Agent Skills
-    ├── 02-agent/          # Stateful multi-turn terminal & HTTP agent (genkitx.DefineAgent)
-    └── 03-multi-agent/    # Multi-agent delegation (aida -> inspector & researcher)
+├── part-4/
+│   ├── 01-flow/           # Stateless diagnostic flow with dotprompt, retry & Agent Skills
+│   ├── 02-agent/          # Stateful multi-turn terminal & HTTP agent (genkitx.DefineAgent)
+│   ├── 03-multi-agent/    # Multi-agent delegation (aida -> inspector & researcher)
+│   └── 04-interruptions/  # Human-in-the-loop tool interrupts
+└── part-6/
+    └── ...                # Hardened public Cloud Run agent (budgets, HTTP gates & Model Armor)
 ```
 
 ---
@@ -104,6 +107,33 @@ export GOOGLE_CLOUD_LOCATION="global"
 
 ---
 
+## Part 5: Designing Agentic Interfaces with A2UI and Genkit
+
+In [Part 5](https://danicat.dev/posts/designing-agentic-interfaces-with-a2ui-and-genkit/), AIDA graduates to a custom [A2UI](https://a2ui.org/) diagnostic cockpit with human-in-the-loop tool interrupts. The full desktop and web cockpit lives in its own repository: [`danicat/go-aida`](https://github.com/danicat/go-aida).
+
+---
+
+## Part 6: How to Ship a Public AI Agent Without Breaking the Budget
+
+In [Part 6](https://danicat.dev/posts/chibi-dani-architecture/), we harden **Chibi Dani** for unauthenticated public traffic on Cloud Run using minimal token/compute budgets, least-privilege IAM, HTTP perimeter middleware, Google Cloud Model Armor, and PII-redacted Firestore telemetry.
+
+```bash
+cd part-6
+go test -count=1 ./...
+
+export GOOGLE_CLOUD_PROJECT="your-project-id"
+export MODEL_ARMOR_TEMPLATE="projects/your-project-id/locations/us-central1/templates/chibi-dani-template"
+go run .
+```
+
+See [`part-6/README.md`](part-6/README.md) for local `curl` examples and setup notes.
+
+---
+
 ## License
 
 This project is licensed under the [Apache 2.0 License](LICENSE).
+
+## Disclaimer
+
+This is not an officially supported Google product. It is an experimental project created for educational and development purposes.
