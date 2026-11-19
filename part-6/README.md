@@ -6,12 +6,13 @@ It combines Genkit Go token budgets, HTTP perimeter checks, Google Cloud Model A
 
 ## Architecture and Files
 
-- [`main.go`](main.go): Initializes Gemini Enterprise (`gemini-3.5-flash-lite`), `read_corpus`, turn caps (`ai.WithMaxTurns(5)`), and `mwexp.Budget` token limits per run and per session.
+- [`main.go`](main.go): Initializes Gemini Enterprise (`gemini-3.5-flash-lite` with `MaxOutputTokens: 1500`), `read_corpus`, turn caps (`ai.WithMaxTurns(5)`), and `mwexp.Budget` token limits per run and per session.
 - [`system_prompt.md`](system_prompt.md): Defines Chibi Dani's persona, topic scope, citation format, and refusal rules embedded ahead of the content index.
 - [`corpus.go`](corpus.go): Loads published Markdown articles, codelabs, talks, and videos into memory at startup (`LoadCorpus`). A small sample dataset is bundled under `content/` and `data/` for local testing.
-- [`server.go`](server.go): Chains `http.CrossOriginProtection`, CORS response headers, per-IP token-bucket rate limiting (`golang.org/x/time/rate`), trailing `X-Forwarded-For` parsing (`clientIP`), an `8 KB` / `1,200`-rune strict JSON envelope check, and server-minted UUIDv4 `sessionId` verification against `sessionStore`.
-- [`armor.go`](armor.go): Wraps model calls in `WrapModel` with regional Google Cloud Model Armor screening (`SanitizeUserPrompt` and `SanitizeModelResponse`), surfacing `PERMISSION_DENIED` on policy hits.
-- [`telemetry.go`](telemetry.go): Saves PII-redacted turn outcomes (`ok`, `armor_blocked`, `budget_exceeded`, `error`), cited URLs, and latency to Cloud Firestore while turning off Genkit prompt/reply logging in Cloud Trace.
+- [`session_store.go`](session_store.go): Wraps `localstore.InMemorySessionStore` in a bounded LRU (`256` sessions) and `30`-minute idle TTL store validated against Genkit's `sessionstoretest` suite so unauthenticated traffic cannot exhaust container RAM.
+- [`server.go`](server.go): Chains `http.CrossOriginProtection`, strict `Origin` + CORS enforcement (with `CHIBI_ALLOW_LOCALHOST=true` opt-in for local dev), an `O(1)` LRU-bounded per-IP rate limiter (`6 req/min`, burst `4`, max `4,096` IPs), a global container rate limiter (`20 req/min`, burst `10`) plus rolling `24h` request cap (`1,500`/day), trailing `X-Forwarded-For` parsing (`clientIP`), an `8 KB` / `1,200`-rune strict JSON envelope check, and server-minted UUIDv4 `sessionId` verification.
+- [`armor.go`](armor.go): Wraps generation in `WrapGenerate` with regional Google Cloud Model Armor screening: `SanitizeUserPrompt` once per turn (`Iteration == 0`), unary `SanitizeModelResponse` for non-streaming calls, and bidirectional gRPC `StreamSanitizeModelResponse` (`STREAMING_MODE_REALTIME`) for SSE streams so unchecked chunks never reach the client.
+- [`telemetry.go`](telemetry.go): Truncates and redacts PII from user questions and writes per-turn outcomes (`ok`, `armor_blocked`, `budget_exceeded`, `error`), cited URLs, and latency to a Firestore `turns` subcollection while turning off Genkit prompt/reply logging in Cloud Trace.
 
 ## Prerequisites
 
@@ -35,10 +36,10 @@ Run the unit test suite:
 go test -count=1 ./...
 ```
 
-Start the HTTP server locally using the bundled sample corpus (or point `CORPUS_DIR` to a full Hugo checkout):
+Start the HTTP server locally with localhost origins enabled using the bundled sample corpus (or point `CORPUS_DIR` to a full Hugo checkout):
 
 ```bash
-go run .
+CHIBI_ALLOW_LOCALHOST=true go run .
 ```
 
 Send a test request from an allowed local origin:
