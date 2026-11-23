@@ -6,9 +6,9 @@ It combines Genkit Go token budgets, HTTP perimeter checks, Google Cloud Model A
 
 ## Architecture and Files
 
-- [`main.go`](main.go): Initializes Gemini Enterprise (`gemini-3.5-flash-lite` with `MaxOutputTokens: 1500`), `read_corpus`, turn caps (`ai.WithMaxTurns(5)`), and `mwexp.Budget` token limits per run and per session.
-- [`system_prompt.md`](system_prompt.md): Defines Chibi Dani's persona, topic scope, citation format, and refusal rules embedded ahead of the content index.
-- [`corpus.go`](corpus.go): Loads published Markdown articles, codelabs, talks, and videos into memory at startup (`LoadCorpus`). A small sample dataset is bundled under `content/` and `data/` for local testing.
+- [`main.go`](main.go): Initializes Gemini Enterprise (`gemini-3.5-flash-lite` with `MaxOutputTokens: 1500`), dynamic system prompts (`ai.WithSystemFn` backed by `corpusStore.Current(ctx)`), `read_corpus`, turn caps (`ai.WithMaxTurns(5)`), and `mwexp.Budget` token limits per run and per session.
+- [`system_prompt.md`](system_prompt.md): Defines Chibi Dani's persona, topic scope, citation format, refusal rules, and recency/supersession rules embedded ahead of the content index.
+- [`corpus.go`](corpus.go) and [`corpus_test.go`](corpus_test.go): Preload `llms.txt` and localized `llms-full.txt` bundles (`en`, `pt-br`, `ja`) from `CORPUS_BASE_URL` (default `https://danicat.dev`) into an immutable in-memory snapshot with same-origin redirect protection and conditional `If-None-Match` (`24h` default via `CORPUS_REFRESH_INTERVAL`) ETag refreshes on incoming turns.
 - [`session_store.go`](session_store.go): Wraps `localstore.InMemorySessionStore` in a bounded LRU (`256` sessions) and `30`-minute idle TTL store validated against Genkit's `sessionstoretest` suite so unauthenticated traffic cannot exhaust container RAM.
 - [`server.go`](server.go): Chains `http.CrossOriginProtection`, strict `Origin` + CORS enforcement (with `CHIBI_ALLOW_LOCALHOST=true` opt-in for local dev), an `O(1)` LRU-bounded per-IP rate limiter (`6 req/min`, burst `4`, max `4,096` IPs), a global container rate limiter (`20 req/min`, burst `10`) plus rolling `24h` request cap (`1,500`/day), trailing `X-Forwarded-For` parsing (`clientIP`), an `8 KB` / `1,200`-rune strict JSON envelope check, and server-minted UUIDv4 `sessionId` verification.
 - [`armor.go`](armor.go): Wraps generation in `WrapGenerate` with regional Google Cloud Model Armor screening: `SanitizeUserPrompt` once per turn (`Iteration == 0`), unary `SanitizeModelResponse` for non-streaming calls, and bidirectional gRPC `StreamSanitizeModelResponse` (`STREAMING_MODE_REALTIME`) for SSE streams so unchecked chunks never reach the client.
@@ -36,7 +36,7 @@ Run the unit test suite:
 go test -count=1 ./...
 ```
 
-Start the HTTP server locally with localhost origins enabled using the bundled sample corpus (or point `CORPUS_DIR` to a full Hugo checkout):
+Start the HTTP server locally with localhost origins enabled (by default it preloads from `https://danicat.dev`; set `CORPUS_BASE_URL` to point at a local Hugo server or custom mirror, and optionally `CORPUS_REFRESH_INTERVAL` such as `24h`):
 
 ```bash
 CHIBI_ALLOW_LOCALHOST=true go run .
